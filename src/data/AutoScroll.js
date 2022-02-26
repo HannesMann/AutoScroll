@@ -88,6 +88,7 @@ chrome.storage.local.get(defaults, function (options) {
 
   var state = {
     timeout: null,
+    oldts: 0,
 
     oldX: null,
     oldY: null,
@@ -114,14 +115,29 @@ chrome.storage.local.get(defaults, function (options) {
     var scrollX = (root ? window.scrollX : scroller.scrollLeft)
       , scrollY = (root ? window.scrollY : scroller.scrollTop)
 
-    function loop() {
+    function loop(ts) {
+      var dt = ts - state.oldts;
+
+      /* Restrict dt to 1-1000 requests per second */
+      if(dt < 1) { 
+        dt = 1;
+      }
+      if(dt > 1000) {
+        dt = 1000;
+      }
+      if(state.oldts == 0) {
+        dt = 0;
+      }
+
       state.timeout = requestAnimationFrame(loop)
 
       var scrollWidth  = scroller.scrollWidth  - elem.clientWidth
         , scrollHeight = scroller.scrollHeight - elem.clientHeight
 
-      scrollX += state.dirX
-      scrollY += state.dirY
+      scrollX += state.dirX * (dt * 0.06) /* At 60 FPS, dt should be scaled to 1 */
+      scrollX = Math.round(scrollX);
+      scrollY += state.dirY * (dt * 0.06)
+      scrollY = Math.round(scrollY);
 
       if (scrollX < 0) {
         scrollX = 0
@@ -147,9 +163,11 @@ chrome.storage.local.get(defaults, function (options) {
         scroller.scrollLeft = scrollX
         scroller.scrollTop  = scrollY
       }
+
+      state.oldts = ts;
     }
 
-    loop();
+    loop(0);
   }
 
 
@@ -250,6 +268,7 @@ chrome.storage.local.get(defaults, function (options) {
 
   function unclick() {
     cancelAnimationFrame(state.timeout)
+    state.oldts = 0;
     state.timeout = null
 
     removeEventListener("wheel", mousewheel, true)
