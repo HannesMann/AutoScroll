@@ -112,8 +112,8 @@ chrome.storage.local.get(defaults, function (options) {
   // The timer that does the actual scrolling; must be very fast so that the scrolling is smooth
   function startCycle(elem, scroller, root) {
     // This is needed to support SVG
-    var scrollX = (root ? window.scrollX : scroller.scrollLeft)
-      , scrollY = (root ? window.scrollY : scroller.scrollTop)
+    //var scrollX = (root ? window.scrollX : scroller.scrollLeft)
+    //  , scrollY = (root ? window.scrollY : scroller.scrollTop)
 
     function loop(ts) {
       var dt = ts - state.oldts;
@@ -122,46 +122,22 @@ chrome.storage.local.get(defaults, function (options) {
       if(dt < 1) { 
         dt = 1;
       }
-      if(dt > 1000) {
-        dt = 1000;
-      }
-      if(state.oldts == 0) {
+      if(dt >= 100 || state.oldts == 0) {
         dt = 0;
       }
 
       state.timeout = requestAnimationFrame(loop)
 
-      var scrollWidth  = scroller.scrollWidth  - elem.clientWidth
-        , scrollHeight = scroller.scrollHeight - elem.clientHeight
-
-      scrollX += state.dirX * (dt * 0.06) /* At 60 FPS, dt should be scaled to 1 */
-      scrollX = Math.round(scrollX);
-      scrollY += state.dirY * (dt * 0.06)
-      scrollY = Math.round(scrollY);
-
-      if (scrollX < 0) {
-        scrollX = 0
-
-      } else if (scrollX > scrollWidth) {
-        scrollX = scrollWidth
-      }
-
-      if (scrollY < 0) {
-        scrollY = 0
-
-      } else if (scrollY > scrollHeight) {
-        scrollY = scrollHeight
-      }
+      var scrollx = state.dirX * (dt * 0.06);
+      var scrolly = state.dirY * (dt * 0.06);
 
       // This is needed to support SVG
       if (root) {
         // This triggers a reflow
-        window.scroll(scrollX, scrollY);
-
+        window.scrollBy(scrollx, scrolly);
       } else {
         // This triggers a reflow
-        scroller.scrollLeft = scrollX
-        scroller.scrollTop  = scrollY
+        scroller.scrollBy(scrollx, scrolly);
       }
 
       state.oldts = ts;
@@ -194,7 +170,7 @@ chrome.storage.local.get(defaults, function (options) {
   // This is needed to make AutoScroll work in SVG documents
   var inner = document.createElementNS(htmlNamespace, "div")
   // TODO hack to make it so that Chrome doesn't repaint when scrolling
-  inner.style.setProperty("transform", "translateZ(0)")
+  inner.style.setProperty("will-change", "opacity")
   inner.style.setProperty("display", "none")
   inner.style.setProperty("position", "fixed")
   inner.style.setProperty("left", "0px")
@@ -208,17 +184,17 @@ chrome.storage.local.get(defaults, function (options) {
 
   function mousewheel(event) {
     // TODO is this a good idea ?
-    stopEvent(event, true)
+    stopEvent(event, false)
   }
 
   function mousemove(event) {
     // TODO is this a good idea ?
-    stopEvent(event, true)
+    stopEvent(event, false)
 
     var x = event.clientX - state.oldX,
         y = event.clientY - state.oldY
 
-    if (math.hypot(x, y) > options["moveThreshold"]) {
+    if (math.hypot(x, y) > options["moveThreshold"] && state.oldts != 0) {
       //state.stickyScroll = false;
 
       inner.style.setProperty("cursor", direction(x, y))
@@ -268,12 +244,13 @@ chrome.storage.local.get(defaults, function (options) {
 
   function unclick() {
     cancelAnimationFrame(state.timeout)
-    state.oldts = 0;
-    state.timeout = null
 
-    removeEventListener("wheel", mousewheel, true)
-    removeEventListener("mousemove", mousemove, true)
-    removeEventListener("mouseup", mouseup, true)
+    state.oldts = 0;
+    state.timeout = null;
+
+    removeEventListener("wheel", mousewheel, {passive: true, capture: true})
+    removeEventListener("mousemove", mousemove, {passive: true, capture: true})
+    removeEventListener("mouseup", mouseup, {passive: false, capture: true})
 
     normalCursor()
 
@@ -287,8 +264,8 @@ chrome.storage.local.get(defaults, function (options) {
     state.dirX = 0
     state.dirY = 0
 
-    state.click = false
-    state.scrolling = false
+    state.click = false;
+    state.scrolling = false;
   }
 
   function normalCursor() {
@@ -297,14 +274,16 @@ chrome.storage.local.get(defaults, function (options) {
 
   function show(o, x, y) {
     state.scrolling = true
-    state.oldX = x
-    state.oldY = y
+    state.oldX = x;
+    state.oldY = y;
+    state.dirX = 0;
+    state.dirY = 0;
 
     startCycle(o.element, o.scroller, o.root)
 
-    addEventListener("wheel", mousewheel, true)
-    addEventListener("mousemove", mousemove, true)
-    addEventListener("mouseup", mouseup, true)
+    addEventListener("wheel", mousewheel, {passive: true, capture: true})
+    addEventListener("mousemove", mousemove, {passive: true, capture: true})
+    addEventListener("mouseup", mouseup, {passive: false, capture: true})
 
     inner.style.setProperty("background-image", "url(\"" + image(o) + "\")")
     inner.style.setProperty("background-position", (x - 13) + "px " +
@@ -491,8 +470,8 @@ chrome.storage.local.get(defaults, function (options) {
     e.stopImmediatePropagation()
     e.stopPropagation()
 
-    if (preventDefault) {
-      e.preventDefault()
+    if(preventDefault) {
+      e.preventDefault();
     }
   }
 
@@ -525,5 +504,5 @@ chrome.storage.local.get(defaults, function (options) {
         }
       }
     }
-  }, true)
+  }, {passive: false})
 })
